@@ -1,0 +1,1 @@
+This repository contains a collection of code related to generative models, including implementations I've written as well as useful resources and codes from other repositories that I've found helpful in my learning journey.
