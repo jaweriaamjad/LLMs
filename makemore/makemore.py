@@ -6,10 +6,10 @@ this code is intended to be super hackable. tune it to your needs.
 Changes from minGPT:
 - I removed the from_pretrained function where we init with GPT2 weights
 - I removed dropout layers because the models we train here are small,
-  it's not necessary to understand at this stage and at this scale.
+	it's not necessary to understand at this stage and at this scale.
 - I removed weight decay and all of the complexity around what parameters are
-  and are not weight decayed. I don't believe this should make a massive
-  difference at the scale that we operate on here.
+	and are not weight decayed. I don't believe this should make a massive
+	difference at the scale that we operate on here.
 """
 
 import os
@@ -56,9 +56,13 @@ class Trigram(nn.Module):
 	def get_block_size(self):
 		return 2 # this model needs 2 previous character to predict the next
 
+	def include_index(self, idx):
+		return torch.cat([torch.zeros(idx.size(0), 1, dtype=int),
+			self.n*idx[:,:-1]+idx[:,1:]], dim=1)
+
+
 	def forward(self, idx, targets=None):
-		idx_tg = [self.n*idx1+idx2 for idx1, idx2 in zip(idx, idx[1:]]
-		 # 'forward pass', lol
+		idx_tg = self.include_index(idx)
 		logits = self.W[idx_tg]
 
 		# if we are given some desired targets also calculate the loss
@@ -308,8 +312,8 @@ if __name__ == '__main__':
 
 	# init model
 	config = ModelConfig(vocab_size=vocab_size, block_size=block_size,
-					   n_layer=args.n_layer, n_head=args.n_head,
-					   n_embd=args.n_embd, n_embd2=args.n_embd2)
+						 n_layer=args.n_layer, n_head=args.n_head,
+						 n_embd=args.n_embd, n_embd2=args.n_embd2)
 	if args.type == 'bigram':
 		model = Bigram(config)
 	elif args.type == 'trigram':
