@@ -35,7 +35,8 @@ class ModelConfig:
 	vocab_size: int = None # the input integers are in range [0 .. vocab_size -1]
 	# parameters below control the sizes of each model slightly differently
 	n_layer: int = 4
-	n_embd: int = 64
+	n_embd: int = 4
+	n_embd1: int = 64
 	n_embd2: int = 64
 	n_head: int = 4
 
@@ -100,6 +101,50 @@ class Bigram(nn.Module):
 			loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
 
 		return logits, loss
+
+# MLP language model
+
+class MLP(nn.Module):
+	"""
+	MLP Language Model. Two fully-connected layers with tanh non-linearity.
+	"""
+
+	def __init__(self, config):
+		super().__init__()
+		self.block_size = self.get_block_size()
+		self.vocab_size = config.vocab_size
+		self.wte = nn.Embedding(config.vocab_size+1, config.n_embd)
+		self.mlp = nn.Sequential(
+			nn.Linear(self.block_size * config.n_embd, config.n_embd2),
+			nn.Tanh(),
+			# nn.Linear(config.n_embd1, config.n_embd2),
+			# nn.Tanh(),
+			nn.Linear(config.n_embd2, self.vocab_size)
+				)
+
+	def get_block_size(self):
+		return 3
+
+	def forward(self, idx, targets=None):
+	# gather the word embeddings of the previous 3 words
+		embs = []
+		idxx = []
+		for k in range(self.block_size):
+			tok_emb = self.wte(idx) # token embeddings of shape (b, t, n_embd)
+			idx = torch.roll(idx, 1, 1)
+			idx[:, 0] = self.vocab_size # special <BLANK> token
+			embs.append(tok_emb)
+		# concat all of the embeddings together and pass through an MLP
+		x = torch.cat(embs, -1) # (b, t, n_embd * block_size)
+		logits = self.mlp(x)
+
+		# if we are given some desired targets also calculate the loss
+		loss = None
+		if targets is not None:
+			loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+
+		return logits, loss
+
 
 # -----------------------------------------------------------------------------
 # helper functions for evaluating and sampling from the model
@@ -289,8 +334,9 @@ if __name__ == '__main__':
 	parser.add_argument('--type', type=str, default='bigram', help="model class type to use, bigram|mlp|rnn|gru|bow|transformer")
 	parser.add_argument('--n-layer', type=int, default=4, help="number of layers")
 	parser.add_argument('--n-head', type=int, default=4, help="number of heads (in a transformer)")
-	parser.add_argument('--n-embd', type=int, default=64, help="number of feature channels in the model")
-	parser.add_argument('--n-embd2', type=int, default=64, help="number of feature channels elsewhere in the model")
+	parser.add_argument('--n-embd', type=int, default=128, help="number of feature channels in the model")
+	parser.add_argument('--n-embd1', type=int, default=128, help="number of feature channels elsewhere in the model")
+	parser.add_argument('--n-embd2', type=int, default=128, help="number of feature channels elsewhere in the model")
 	# optimization
 	parser.add_argument('--batch-size', '-b', type=int, default=32, help="batch size during optimization")
 	parser.add_argument('--learning-rate', '-l', type=float, default=5e-4, help="learning rate")
@@ -313,11 +359,13 @@ if __name__ == '__main__':
 	# init model
 	config = ModelConfig(vocab_size=vocab_size, block_size=block_size,
 						 n_layer=args.n_layer, n_head=args.n_head,
-						 n_embd=args.n_embd, n_embd2=args.n_embd2)
+						 n_embd=args.n_embd1, n_embd2=args.n_embd2)
 	if args.type == 'bigram':
 		model = Bigram(config)
 	elif args.type == 'trigram':
 		model = Trigram(config)
+	elif args.type == 'MLP':
+		model = MLP(config)
 	else:
 		raise ValueError(f'model type {args.type} is not recognized')
 	model.to(args.device)
