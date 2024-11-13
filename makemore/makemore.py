@@ -321,7 +321,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="Make More")
 	# system/input/output
 	parser.add_argument('--input-file', '-i', type=str, default='names.txt', help="input file with things one per line")
-	parser.add_argument('--work-dir', '-o', type=str, default='out', help="output working directory")
+	parser.add_argument('--work-dir', '-o', type=str, default='../../results/LLMs/makemore', help="output working directory")
 	parser.add_argument('--resume', action='store_true', help="when this flag is used, we will resume optimization from existing model in the workdir")
 	parser.add_argument('--sample-only', action='store_true', help="just sample from the model and quit, don't train")
 	parser.add_argument('--num-workers', '-n', type=int, default=4, help="number of data workers for both train/test")
@@ -350,87 +350,87 @@ if __name__ == '__main__':
 	os.makedirs(args.work_dir, exist_ok=True)
 	writer = SummaryWriter(log_dir=args.work_dir)
 
-	# init datasets
-	train_dataset, test_dataset = create_datasets(args.input_file)
-	vocab_size = train_dataset.get_vocab_size()
-	block_size = train_dataset.get_output_length()
-	print(f"dataset determined that: {vocab_size=}, {block_size=}")
+	# # init datasets
+	# train_dataset, test_dataset = create_datasets(args.input_file)
+	# vocab_size = train_dataset.get_vocab_size()
+	# block_size = train_dataset.get_output_length()
+	# print(f"dataset determined that: {vocab_size=}, {block_size=}")
 
-	# init model
-	config = ModelConfig(vocab_size=vocab_size, block_size=block_size,
-						 n_layer=args.n_layer, n_head=args.n_head,
-						 n_embd=args.n_embd1, n_embd2=args.n_embd2)
-	if args.type == 'bigram':
-		model = Bigram(config)
-	elif args.type == 'trigram':
-		model = Trigram(config)
-	elif args.type == 'MLP':
-		model = MLP(config)
-	else:
-		raise ValueError(f'model type {args.type} is not recognized')
-	model.to(args.device)
-	print(f"model #params: {sum(p.numel() for p in model.parameters())}")
-	if args.resume or args.sample_only: # note: if we sample-only then we also assume we are resuming
-		print("resuming from existing model in the workdir")
-		model.load_state_dict(torch.load(os.path.join(args.work_dir, 'model.pt')))
-	if args.sample_only:
-		print_samples(num=50)
-		sys.exit()
+	# # init model
+	# config = ModelConfig(vocab_size=vocab_size, block_size=block_size,
+	# 					 n_layer=args.n_layer, n_head=args.n_head,
+	# 					 n_embd=args.n_embd1, n_embd2=args.n_embd2)
+	# if args.type == 'bigram':
+	# 	model = Bigram(config)
+	# elif args.type == 'trigram':
+	# 	model = Trigram(config)
+	# elif args.type == 'MLP':
+	# 	model = MLP(config)
+	# else:
+	# 	raise ValueError(f'model type {args.type} is not recognized')
+	# model.to(args.device)
+	# print(f"model #params: {sum(p.numel() for p in model.parameters())}")
+	# if args.resume or args.sample_only: # note: if we sample-only then we also assume we are resuming
+	# 	print("resuming from existing model in the workdir")
+	# 	model.load_state_dict(torch.load(os.path.join(args.work_dir, 'model.pt')))
+	# if args.sample_only:
+	# 	print_samples(num=50)
+	# 	sys.exit()
 
-	# init optimizer
-	optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, betas=(0.9, 0.99), eps=1e-8)
+	# # init optimizer
+	# optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay, betas=(0.9, 0.99), eps=1e-8)
 
-	# init dataloader
-	batch_loader = InfiniteDataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, num_workers=args.num_workers)
+	# # init dataloader
+	# batch_loader = InfiniteDataLoader(train_dataset, batch_size=args.batch_size, pin_memory=True, num_workers=args.num_workers)
 
-	# training loop
-	best_loss = None
-	step = 0
-	while True:
+	# # training loop
+	# best_loss = None
+	# step = 0
+	# while True:
 
-		t0 = time.time()
+	# 	t0 = time.time()
 
-		# get the next batch, ship to device, and unpack it to input and target
-		batch = batch_loader.next()
-		batch = [t.to(args.device) for t in batch]
-		X, Y = batch
-		# feed into the model
-		logits, loss = model(X, Y)
+	# 	# get the next batch, ship to device, and unpack it to input and target
+	# 	batch = batch_loader.next()
+	# 	batch = [t.to(args.device) for t in batch]
+	# 	X, Y = batch
+	# 	# feed into the model
+	# 	logits, loss = model(X, Y)
 
-		# calculate the gradient, update the weights
-		model.zero_grad(set_to_none=True)
-		loss.backward()
-		optimizer.step()
+	# 	# calculate the gradient, update the weights
+	# 	model.zero_grad(set_to_none=True)
+	# 	loss.backward()
+	# 	optimizer.step()
 
-		# wait for all CUDA work on the GPU to finish then calculate iteration time taken
-		if args.device.startswith('cuda'):
-			torch.cuda.synchronize()
-		t1 = time.time()
+	# 	# wait for all CUDA work on the GPU to finish then calculate iteration time taken
+	# 	if args.device.startswith('cuda'):
+	# 		torch.cuda.synchronize()
+	# 	t1 = time.time()
 
-		# logging
-		if step % 10 == 0:
-			print(f"step {step} | loss {loss.item():.4f} | step time {(t1-t0)*1000:.2f}ms")
+	# 	# logging
+	# 	if step % 10 == 0:
+	# 		print(f"step {step} | loss {loss.item():.4f} | step time {(t1-t0)*1000:.2f}ms")
 
-		# evaluate the model
-		if step > 0 and step % 500 == 0:
-			train_loss = evaluate(model, train_dataset, batch_size=100, max_batches=10)
-			test_loss  = evaluate(model, test_dataset,  batch_size=100, max_batches=10)
-			writer.add_scalar("Loss/train", train_loss, step)
-			writer.add_scalar("Loss/test", test_loss, step)
-			writer.flush()
-			print(f"step {step} train loss: {train_loss} test loss: {test_loss}")
-			# save the model to disk if it has improved
-			if best_loss is None or test_loss < best_loss:
-				out_path = os.path.join(args.work_dir, "model.pt")
-				print(f"test loss {test_loss} is the best so far, saving model to {out_path}")
-				torch.save(model.state_dict(), out_path)
-				best_loss = test_loss
+	# 	# evaluate the model
+	# 	if step > 0 and step % 500 == 0:
+	# 		train_loss = evaluate(model, train_dataset, batch_size=100, max_batches=10)
+	# 		test_loss  = evaluate(model, test_dataset,  batch_size=100, max_batches=10)
+	# 		writer.add_scalar("Loss/train", train_loss, step)
+	# 		writer.add_scalar("Loss/test", test_loss, step)
+	# 		writer.flush()
+	# 		print(f"step {step} train loss: {train_loss} test loss: {test_loss}")
+	# 		# save the model to disk if it has improved
+	# 		if best_loss is None or test_loss < best_loss:
+	# 			out_path = os.path.join(args.work_dir, "model.pt")
+	# 			print(f"test loss {test_loss} is the best so far, saving model to {out_path}")
+	# 			torch.save(model.state_dict(), out_path)
+	# 			best_loss = test_loss
 
-		# sample from the model
-		if step > 0 and step % 200 == 0:
-			print_samples(num=10)
+	# 	# sample from the model
+	# 	if step > 0 and step % 200 == 0:
+	# 		print_samples(num=10)
 
-		step += 1
-		# termination conditions
-		if args.max_steps >= 0 and step >= args.max_steps:
-			break
+	# 	step += 1
+	# 	# termination conditions
+	# 	if args.max_steps >= 0 and step >= args.max_steps:
+	# 		break
